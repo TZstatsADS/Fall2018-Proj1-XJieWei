@@ -1,0 +1,452 @@
+---
+title: "What Makes People Happy?"
+subtitle: Single vs. Married vs. Divorced
+output:
+  html_notebook: default
+  html_document: default
+  pdf_document: default
+---
+
+
+![](C:/Users/xw2536/Desktop/begin2.jpg)
+
+In this project, I explore the relationship between happiness and the marital status. There is a saying that "Marriage is the tomb of love"(by Giacomo Casanova).I am interested in how the happiness changes when a single person become married and when a married person become divorced.
+Therefore, I subtract the dataset that the marital status is single, married and divorced.
+
+1) First, the dataset has been processed and cleaned already (processed_moments.csv). We want to know each word in each happy moment, and get the frequency of per-sentense-per-word.
+2) After getting the count number of each word, we assign topics for each sentense by using topicmodels package and mannualy assign the name tags to each topic.Then,exploring in each group (single,married,divorced) the frequency of each topic.
+
+
+```{r load libraries, warning=FALSE, message=FALSE,echo=FALSE}
+# PreStep 0 - Load all the required libraries
+
+library(tidyverse)
+library(tidytext)
+library(DT)
+library(scales)
+library(wordcloud2)
+library(gridExtra)
+library(ngram)
+library(shiny) 
+library(topicmodels)
+library(igraph)
+library(tm)
+```
+
+```{r load data, echo=FALSE,warning=FALSE, message=FALSE}
+# PreStep 1 - Load the processed text data along with demographic information on contributors
+
+hm_data <- read_csv("C:/Users/xw2536/Desktop/processed_moments.csv")
+urlfile<-'https://raw.githubusercontent.com/rit-public/HappyDB/master/happydb/data/demographic.csv'
+demo_data <- read_csv(urlfile)
+```
+
+
+```{r combining data,warning=FALSE, message=FALSE,echo=FALSE}
+#I use the processed data (from Text_Processing.Rmd) for our analysis and combine it with the demographic information available.
+#I select a subset of the data that satisfies specific row conditions.
+#And in terms of marital status, I focus on three statuses-single,married,divorced.
+
+hm_data <- hm_data %>%
+  inner_join(demo_data, by = "wid") %>%
+  select(wid,
+         original_hm,
+         gender, 
+         marital, 
+         parenthood,
+         reflection_period,
+         age, 
+         country, 
+         ground_truth_category, 
+         text) %>%
+  mutate(count = sapply(hm_data$text, wordcount)) %>%
+  filter(gender %in% c("m", "f")) %>%
+  filter(parenthood %in% c("n", "y")) %>%
+  filter(reflection_period %in% c("24h", "3m")) %>%
+  mutate(reflection_period = fct_recode(reflection_period, 
+                                        months_3 = "3m", hours_24 = "24h"))
+
+
+hm_data <- hm_data %>%
+filter(marital %in% c("single","married","divorced"))
+
+```
+
+```{r,echo=FALSE}
+datatable(hm_data)
+```
+
+---
+
+> ### Part 1 - Words from Happy Moments
+
+
+#### Text Mining and WordCloud
+First, I want to get a rough statistic that what their happiness moments come from. Therefore, I counted the frequency of words in three group of people by using tm package. 
+From the wordclouds, we find that indeed there are the difference within single,married and divorced people. 
+
+we can see that no matter single, married or divorced people, there are always 3 words used a lot in the happiness sentenses. They are "day","time" and "friend". We will focus on other words except these three words.
+
+```{r bag of words, warning=FALSE, message=FALSE,echo=FALSE}
+bag_of_words <-  hm_data %>%
+  unnest_tokens(word, text)
+
+word_count <- bag_of_words %>%
+  count(word, sort = TRUE)
+```
+
+
+**Single people**
+```{r,echo=FALSE,fig.width=8, fig.height=4}
+single_data <- filter(hm_data,marital=="single")
+bag_of_words_s <- single_data %>%
+  unnest_tokens(word,text)
+
+word_count_s <- bag_of_words_s %>%
+  count(word,sort = TRUE)
+
+#dog <- system.file("examples/dog.jpg",package="wordcloud2")
+
+wordcloud_single <- wordcloud2(word_count_s,color='random-light',
+                               backgroundColor = 'dark',size = 2,
+                               minRotation = pi/2,maxRotation = pi/2,
+                               rotateRatio = 0.5)#, figPath = "C:/Users/xw2536/Desktop/dog.jpg")
+wordcloud_single
+```
+We find that the words "found", "watched/played/bought/game", "night", "eat/ate/dinner/food" and "cat/dog" take a large part on their happiness moment. For single people, they more focus on theirselves and their own feelings, which means their happiness more come from their own experience not others.
+
+<br/>
+
+**Married people**
+```{r,echo=FALSE,fig.width=8, fig.height=4}
+married_data <- filter(hm_data,marital=="married")
+bag_of_words_m <- married_data %>%
+  unnest_tokens(word,text)
+
+word_count_m <- bag_of_words_m %>%
+  count(word,sort = TRUE)
+
+#heart<- system.file("examples/heart.jpg",package="wordcloud2")
+
+wordcloud_married <- wordcloud2(word_count_m,color='random-light',
+                               backgroundColor = 'black',size = 2,
+                               minRotation = pi/2,maxRotation = pi/2,
+                               rotateRatio = 0.5)#,figPath = "C:/Users/xw2536/Desktop/heart.jpg")
+wordcloud_married
+```
+Compared to single people, words like "son", "daughter", "husband", "wife", "family" and "home", married people used a lot in the happiness sentenses. Married people have responsibility to take care their family. What's more, after marriage, most of time are spent with their family. Therefore, their happiness most come from their spouse and children.
+
+<br/>
+
+**Divorced people**
+```{r,echo=FALSE,fig.width=8, fig.height=4}
+#Of course, for divorced people, you cannot see word like wife, husband
+#lovly dog appears again.
+divorced_data <- filter(hm_data,marital=="divorced")
+bag_of_words_d <- divorced_data %>%
+  unnest_tokens(word,text)
+
+word_count_d <- bag_of_words_d %>%
+  count(word,sort = TRUE)
+
+wordcloud_divorced <- wordcloud2(word_count_d,color='random-light',
+                               backgroundColor = 'black',size = 2,
+                               minRotation = pi/2,maxRotation = pi/2,
+                               rotateRatio = 0.5)#,figPath = "C:/Users/xw2536/Desktop/heartbreak.jpg")
+wordcloud_divorced
+```
+Except for happy "day", "time" and "friend", the major happiness of divorced people come from their children(word"son", and "daughter") .
+<br/>
+
+---
+
+> ### Part 2 - Food, Sleep, Pets and Happiness
+
+#### Topic Modeling and LDA
+##### **Single**
+
+```{r,echo=FALSE}
+
+hm_data1 <- hm_data %>%
+filter(marital %in% c("single"))
+
+
+hm.list=hm_data1[2:(nrow(hm_data1)-1), ]
+sent.pre=hm_data1$text[1:(nrow(hm_data1)-2)]
+sent.post=hm_data1$text[3:(nrow(hm_data1)-1)]
+hm.list$snipets=paste(sent.pre, hm.list$text, sent.post, sep=" ")
+
+docs_c <- Corpus(VectorSource(hm.list$snipets))
+# hlw <- DocumentTermMatrix(corpus, control = list(weighting = function(x) weightTfIdf(x,  normalize =FALSE), 
+# stopwords = TRUE))
+# cc.h=tidy(hlw)
+
+# termFreq(completed$text)
+hlw <- DocumentTermMatrix(docs_c)
+
+rowTotals_c <- apply(hlw, 1, sum) 
+
+hlw  <- hlw[rowTotals_c> 0, ]
+hm.list = hm.list[rowTotals_c > 0, ]
+```
+
+```{r,echo=FALSE}
+setwd("C:/Users/xw2536/Desktop")
+burnin_c <- 400
+iter_c <- 200
+thin_c <- 50
+seed_c <-list(2003,5,63,100001,765)
+nstart_c <- 5
+best_c <- TRUE
+
+#number of topics
+k <- 10
+
+
+# run LDA using Gibbs sampling
+ldaOut_c <-LDA(hlw, k, method="Gibbs", control=list(nstart=nstart_c, 
+                                                    seed = seed_c, best=best_c,
+                                                    burnin = burnin_c, iter = iter_c,                                                                                 thin=thin_c))
+ldaOut.topics <- as.matrix(topics(ldaOut_c))
+table(c(1:k, ldaOut.topics))
+
+write.csv(ldaOut.topics,"C:/Users/xw2536/Desktop/out/DocsToTopics.csv")
+
+#top 6 terms in each topic
+ldaOut.terms <- as.matrix(terms(ldaOut_c,20))
+write.csv(ldaOut.terms,"C:/Users/xw2536/Desktop/out/TopicsToTerms.csv")
+
+#probabilities
+topicProbabilities <- as.data.frame(ldaOut_c@gamma)
+write.csv(ldaOut.terms,"C:/Users/xw2536/Desktop/out/TopicProbabilities.csv")
+```
+
+
+```{r,echo=FALSE}
+terms.beta=ldaOut_c@beta
+terms.beta=scale(terms.beta)
+topics.terms=NULL
+for(i in 1:k){
+  topics.terms=rbind(topics.terms, ldaOut_c@terms[order(terms.beta[i,], decreasing = TRUE)[1:7]])
+}
+#topics.terms
+#ldaOut.terms
+```
+
+
+Word-topic Probabilities
+The terms that are most common within each topic.Given this results, I manually tag the topics (from 1~10) as "Work", "School", "Exercise", "Family", "Home&Stuff", "Vacation", "Pets&People", "Dailylife", "Food", and "Entertainment".
+```{r,echo=FALSE}
+library(ggplot2)
+library(dplyr)
+
+
+ap_topics <- tidy(ldaOut_c, matrix = "beta")
+#ap_topics
+
+ap_top_terms <- ap_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+ap_top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+```
+
+```{r,echo=FALSE}
+topics.hash=c("Work", "School", "Exercise", "Family", "Home&Stuff", "Vacation", "Pets&People", "Dailylife", "Food", "Entertainment")
+hm.list$ldatopic=as.vector(ldaOut.topics)
+hm.list$ldahash=topics.hash[ldaOut.topics]
+
+colnames(topicProbabilities)=topics.hash
+hm.list.df=cbind(hm.list, topicProbabilities)
+
+ggplot(hm.list.df,aes(hm.list.df$ldahash))+geom_bar(fill="skyblue")+xlab("Topic")+ggtitle("Single:Topic Frequency")+theme(axis.text.x = element_text(angle = 45,hjust = 1))
+```
+
+##### **Married**
+```{r,echo=FALSE}
+
+hm_data2 <- hm_data %>%
+filter(marital %in% c("married"))
+
+
+hm.list2=hm_data2[2:(nrow(hm_data2)-1), ]
+sent.pre2=hm_data2$text[1:(nrow(hm_data2)-2)]
+sent.post2=hm_data2$text[3:(nrow(hm_data2)-1)]
+hm.list2$snipets=paste(sent.pre2, hm.list2$text, sent.post2, sep=" ")
+
+docs_2 <- Corpus(VectorSource(hm.list2$snipets))
+# hlw <- DocumentTermMatrix(corpus, control = list(weighting = function(x) weightTfIdf(x,  normalize =FALSE), 
+# stopwords = TRUE))
+# cc.h=tidy(hlw)
+
+# termFreq(completed$text)
+hlw2 <- DocumentTermMatrix(docs_2)
+
+rowTotals_2 <- apply(hlw2, 1, sum) 
+
+hlw2  <- hlw2[rowTotals_2> 0, ]
+hm.list2 = hm.list2[rowTotals_2 > 0, ]
+```
+
+```{r,echo=FALSE}
+burnin_2 <- 400
+iter_2 <- 200
+thin_2 <- 50
+seed_2 <-list(2003,5,63,100001,765)
+nstart_2 <- 5
+best_2 <- TRUE
+
+#number of topics
+k <- 10
+
+
+# run LDA using Gibbs sampling
+ldaOut_2 <-LDA(hlw2, k, method="Gibbs", control=list(nstart=nstart_2, 
+                                                    seed = seed_2, best=best_2,
+                                                    burnin = burnin_2, iter = iter_2,                                                                                 thin=thin_2))
+ldaOut.topics2 <- as.matrix(topics(ldaOut_2))
+table(c(1:k, ldaOut.topics2))
+
+write.csv(ldaOut.topics2,"C:/Users/xw2536/Desktop/out/DocsToTopics2.csv")
+
+#top 6 terms in each topic
+ldaOut.terms2 <- as.matrix(terms(ldaOut_2,20))
+write.csv(ldaOut.terms2,"C:/Users/xw2536/Desktop/out/TopicsToTerms2.csv")
+
+#probabilities
+topicProbabilities2 <- as.data.frame(ldaOut_2@gamma)
+write.csv(ldaOut.terms2,"C:/Users/xw2536/Desktop/out/TopicProbabilities2.csv")
+```
+
+
+```{r,echo=FALSE}
+terms.beta2=ldaOut_2@beta
+terms.beta2=scale(terms.beta2)
+topics.terms2=NULL
+for(i in 1:k){
+  topics.terms2=rbind(topics.terms2, ldaOut_2@terms[order(terms.beta2[i,], decreasing = TRUE)[1:7]])
+}
+
+#topics.terms2
+head(ldaOut.terms2,6)
+```
+
+
+Given the results, I manually tag the topics (from 1~10) as "Vacation", "FamilyLife", "InnerFeelings", "School", "Pets&People", "Community", "DailyLife", "Work", "Family", and "Home".
+
+```{r,echo=FALSE}
+topics.hash2=c("Vacation", "FamilyLife", "InnerFeelings", "School", "Pets&People", "Community", "DailyLife", "Work", "Family", "Home")
+hm.list2$ldatopic=as.vector(ldaOut.topics2)
+hm.list2$ldahash=topics.hash2[ldaOut.topics2]
+
+colnames(topicProbabilities2)=topics.hash2
+hm.list.df2=cbind(hm.list2, topicProbabilities2)
+
+ggplot(hm.list.df2,aes(hm.list.df2$ldahash))+geom_bar(fill="skyblue")+xlab("Topic")+ggtitle("Married:Topic Frequency")+theme(axis.text.x = element_text(angle = 45,hjust = 1))
+```
+
+##### **Divorced**
+```{r,echo=FALSE}
+
+hm_data3 <- hm_data %>%
+filter(marital %in% c("divorced"))
+
+
+hm.list3=hm_data3[2:(nrow(hm_data3)-1), ]
+sent.pre3=hm_data3$text[1:(nrow(hm_data3)-2)]
+sent.post3=hm_data3$text[3:(nrow(hm_data3)-1)]
+hm.list3$snipets=paste(sent.pre3, hm.list3$text, sent.post3, sep=" ")
+
+docs_3 <- Corpus(VectorSource(hm.list3$snipets))
+# hlw <- DocumentTermMatrix(corpus, control = list(weighting = function(x) weightTfIdf(x,  normalize =FALSE), 
+# stopwords = TRUE))
+# cc.h=tidy(hlw)
+
+# termFreq(completed$text)
+hlw3 <- DocumentTermMatrix(docs_3)
+
+rowTotals_3 <- apply(hlw3, 1, sum) 
+
+hlw3  <- hlw3[rowTotals_3> 0, ]
+hm.list3 = hm.list3[rowTotals_3 > 0, ]
+```
+
+```{r,echo=FALSE}
+burnin_2 <- 400
+iter_2 <- 200
+thin_2 <- 50
+seed_2 <-list(2003,5,63,100001,765)
+nstart_2 <- 5
+best_2 <- TRUE
+
+#number of topics
+k <- 10
+
+
+# run LDA using Gibbs sampling
+ldaOut_3 <-LDA(hlw3, k, method="Gibbs", control=list(nstart=nstart_2, 
+                                                    seed = seed_2, best=best_2,
+                                                    burnin = burnin_2, iter = iter_2,                                                                                 thin=thin_2))
+ldaOut.topics3 <- as.matrix(topics(ldaOut_3))
+table(c(1:k, ldaOut.topics3))
+
+write.csv(ldaOut.topics3,"C:/Users/xw2536/Desktop/out/DocsToTopics3.csv")
+
+#top 6 terms in each topic
+ldaOut.terms3 <- as.matrix(terms(ldaOut_3,20))
+write.csv(ldaOut.terms3,"C:/Users/xw2536/Desktop/out/TopicsToTerms3.csv")
+
+#probabilities
+topicProbabilities3 <- as.data.frame(ldaOut_3@gamma)
+write.csv(ldaOut.terms3,"C:/Users/xw2536/Desktop/out/TopicProbabilities3.csv")
+```
+
+
+```{r,echo=FALSE}
+terms.beta3=ldaOut_3@beta
+terms.beta3=scale(terms.beta3)
+topics.terms3=NULL
+for(i in 1:k){
+  topics.terms3=rbind(topics.terms3, ldaOut_3@terms[order(terms.beta3[i,], decreasing = TRUE)[1:7]])
+}
+
+#topics.terms3
+#ldaOut.terms3
+head(ldaOut.terms3,6)
+```
+
+
+Given the results, I manually tag the topics (from 1~10) as "School", "Food", "FamilyLife", "Community", "Family", "DailyLife(Pets)", "Shopping", "Vacation", "Entertainment", and "Work".
+
+```{r,echo=FALSE}
+topics.hash3=c("School", "Food", "FamilyLife", "Community", "Family", "DailyLife(Pets)", "Shopping", "Vacation", "Entertainment", "Work")
+hm.list3$ldatopic=as.vector(ldaOut.topics3)
+hm.list3$ldahash=topics.hash3[ldaOut.topics3]
+
+colnames(topicProbabilities3)=topics.hash3
+hm.list.df3=cbind(hm.list3, topicProbabilities3)
+
+ggplot(hm.list.df3,aes(hm.list.df3$ldahash))+geom_bar(fill="skyblue")+xlab("Topic")+ggtitle("Divorced:Topic Frequency")+theme(axis.text.x = element_text(angle = 45,hjust = 1))
+```
+
+
+---
+
+> ### Conclusions 
+
+![](C:/Users/xw2536/Desktop/end.png)
+
+When people are in different marital status, they also play different roles in their life. Theirfore, what they talk, who they talk with and when they talk are also changed. 
+
+* For young people, most of them are single. The large portion of their days is spent at school and work. They have energy and time to try new things or have a new relationship. Therefore, they will be happy when they get any achievments in the study and job.
+
+* Compared to the single people that they more value their own achievements, married people pay more attention on their families' and friends' feelings. When they married, they had the sense to take care of their spouse, children or neighbours. Therefore, their happiness come from the hapiness of others (family).
+
+* Food is the best thing ine th world. It can give you any taste and "feelings" you want. When people go from "heaven" to "earth", they need FOOD. Moreover, when people get away with the "marriage", they have more time on other things like study and "social life". Therefore, they get more happiness from food, study and interaction with others.
