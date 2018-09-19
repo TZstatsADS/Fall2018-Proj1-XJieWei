@@ -9,7 +9,7 @@ This is the first and only *individual* (as opposed to *team*) this semester.
 
 Term: Fall 2018
 
-+ Projec title: Does happiness change after marriage?
++ Projec title: Does happiness change after marriage? What makes them happy?
 + This project is conducted by [Xiaojie Wei]
 
 + Project summary: In this project, I explore the relationship between happiness and the marital status. There is a saying that "Marriage is the tomb of love"(by Giacomo Casanova).I am interested in how the happiness changes when a single person become married and when a married person become divorced.
